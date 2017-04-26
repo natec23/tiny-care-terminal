@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 var config = require(__dirname + '/config.js');
 var twitterbot = require(__dirname + '/twitterbot.js');
+var lastfm = require(__dirname + '/lastfm.js');
 
 var spawn = require( 'child_process' ).spawn;
 var blessed = require('blessed');
@@ -33,7 +34,10 @@ var weatherBox = grid.set(0, 8, 2, 4, blessed.box, makeScrollBox(' 🌤 '));
 var todayBox = grid.set(0, 0, 6, 6, blessed.box, makeScrollBox(' 📝  Today '));
 var weekBox = grid.set(6, 0, 6, 6, blessed.box, makeScrollBox(' 📝  Week '));
 var commits = grid.set(0, 6, 6, 2, contrib.bar, makeGraphBox('Commits'));
-var parrotBox = grid.set(6, 6, 6, 6, blessed.box, makeScrollBox(''));
+var parrotBox = grid.set(8, 8, 6, 4, blessed.box, makeScrollBox(''));
+
+var music = grid.set(6, 6, 6, 2, contrib.bar, makeGraphBox('♫  Music'));
+var musicBox = grid.set(6, 8, 2, 4, blessed.box, makeScrollBox('♫  Today'));
 
 var tweetBoxes = {}
 tweetBoxes[config.twitter[1]] = grid.set(2, 8, 2, 4, blessed.box, makeBox(' 💖 '));
@@ -46,6 +50,25 @@ function tick() {
   doTheWeather();
   doTheTweets();
   doTheCodes();
+ 
+  doTheMusic();
+}
+
+function doTheMusic() {
+  var today_total = 0;
+  var week_total = 0;
+  lastfm.dayTracks(0).then(function(result) {
+    musicBox.content = result.tracks;
+    today_total = result.total;
+    screen.render();
+
+    lastfm.dayTracks(1).then(function(result) {
+      week_total = result.total;
+      music.setData({titles: ['today', 'yesterday'], data: [today_total, week_total]});
+      screen.render();
+    });
+
+  });
 }
 
 function doTheWeather() {
