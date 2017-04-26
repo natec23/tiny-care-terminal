@@ -34,7 +34,7 @@ var weatherBox = grid.set(0, 8, 2, 4, blessed.box, makeScrollBox(' 🌤 '));
 var todayBox = grid.set(0, 0, 6, 6, blessed.box, makeScrollBox(' 📝  Today '));
 var weekBox = grid.set(6, 0, 6, 6, blessed.box, makeScrollBox(' 📝  Week '));
 var commits = grid.set(0, 6, 6, 2, contrib.bar, makeGraphBox('Commits'));
-var parrotBox = grid.set(8, 8, 6, 4, blessed.box, makeScrollBox(''));
+var parrotBox = grid.set(8, 8, 4, 4, blessed.box, makeScrollBox(''));
 
 var music = grid.set(6, 6, 6, 2, contrib.bar, makeGraphBox('♫  Music'));
 var musicBox = grid.set(6, 8, 2, 4, blessed.box, makeScrollBox('♫  Today'));
