@@ -2,13 +2,14 @@ var request = require("request");
 
 function dayTracks(day) {
 	var today = new Date();
-	var date = new Date(today.getFullYear(), today.getMonth(), (today.getDate() - day), 0, 0, 0);
-	return getRecent((date.getTime() / 1000), (Date.now() / 1000));
+	var start = new Date(today.getFullYear(), today.getMonth(), (today.getDate() - day), 0, 0, 0);
+	var end = new Date(today.getFullYear(), today.getMonth(), (today.getDate() - day), 23, 59, 59);
+	return getRecent((start.getTime() / 1000), (end.getTime() / 1000));
 }
 
 function getRecent(from, to) {
 	return new Promise(function (resolve, reject) {
-		var url =  "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user="+process.env.TCC_LASTFM_USERNAME+"&api_key="+process.env.TCC_LASTFM_KEY+"&format=json&limit=10&from="+from+"to="+to;
+		var url =  "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user="+process.env.TCC_LASTFM_USERNAME+"&api_key="+process.env.TCC_LASTFM_KEY+"&format=json&limit=10&from="+from+"&to="+to;
 		request({
 			url: url,
 			json: true
@@ -28,4 +29,5 @@ function getRecent(from, to) {
 
 }
 
- module.exports.dayTracks = dayTracks;
+module.exports.dayTracks = dayTracks;
+
