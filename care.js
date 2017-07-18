@@ -1,26 +1,28 @@
 #!/usr/bin/env node
 var config = require(__dirname + '/config.js');
 var twitterbot = require(__dirname + '/twitterbot.js');
-var notifier = require('node-notifier');
+var gitbot = require(__dirname + '/gitbot.js');
 var pomodoro = require(__dirname + '/pomodoro.js');
+var ansiArt = require('ansi-art').default;
 
-var lastfm = require(__dirname + '/lastfm.js');
-
+var notifier = require('node-notifier');
 var spawn = require('child_process').spawn;
 var blessed = require('blessed');
 var contrib = require('blessed-contrib');
 var chalk = require('chalk');
-var parrotSay = require('parrotsay-api');
 var bunnySay = require('sign-bunny');
+var yosay = require('yosay');
 var weather = require('weather-js');
 
 var inPomodoroMode = false;
+
+var lastfm = require(__dirname + '/lastfm.js');
 
 var screen = blessed.screen(
     {fullUnicode: true, // emoji or bust
      smartCSR: true,
      autoPadding: true,
-     title: '✨💖 tiny care terminal 💖✨'
+     title: config.terminal_title
     });
 
 // Quit on Escape, q, or Control-C.
@@ -155,27 +157,12 @@ function doTheTweets() {
         return;
       }
       twitterbot.getTweet(config.twitter[which]).then(function(tweet) {
-        if (config.say === 'bunny') {
-          parrotBox.content = bunnySay(tweet.text);
-          screen.render();
-        } else if (config.say === 'llama') {
-          parrotBox.content = llamaSay(tweet.text);
-          screen.render();
-        } else if (config.say === 'cat') {
-          parrotBox.content = catSay(tweet.text);
-          screen.render();
-        } else {
-          parrotSay(tweet.text).then(function(text) {
-            parrotBox.content = text;
-            screen.render();
-          });
-        }
+        parrotBox.content = getAnsiArt(tweet.text)
+        screen.render();
       },function(error) {
         // Just in case we don't have tweets.
-        parrotSay('Hi! You\'re doing great!!!').then(function(text) {
-          parrotBox.content = text;
-          screen.render();
-        });
+        parrotBox.content = getAnsiArt('Hi! You\'re doing great!!!')
+        screen.render();
       });
     } else {
       twitterbot.getTweet(config.twitter[which]).then(function(tweet) {
@@ -194,23 +181,58 @@ function doTheCodes() {
   var todayCommits = 0;
   var weekCommits = 0;
 
-  var today = spawn('sh', [__dirname + '/standup-helper.sh', config.repos], {shell:true});
-  // var today = spawn('sh ' + __dirname + '/standup-helper.sh', ['-m ' + config.depth, config.repos], {shell:true});
-  todayBox.content = '';
-  today.stdout.on('data', data => {
-    todayCommits = getCommits(`${data}`, todayBox);
-    updateCommitsGraph(todayCommits, weekCommits);
-    screen.render();
-  });
+  function getCommits(data, box) {
+    var content = colorizeLog(data || '');
+    box.content += content;
+    var commitRegex = /(.......) (- .*)/g;
+    return (box && box.content) ? (box.content.match(commitRegex) || []).length : '0';
+  }
 
-var week = spawn('sh', [__dirname + '/standup-helper.sh', '-d 7', config.repos], {shell:true});
-  // var week = spawn('sh ' + __dirname + '/standup-helper.sh', ['-m ' + config.depth + ' -d 7', config.repos], {shell:true});
-  weekBox.content = '';
-  week.stdout.on('data', data => {
-    weekCommits = getCommits(`${data}`, weekBox);
-    updateCommitsGraph(todayCommits, weekCommits);
-    screen.render();
-  });
+  if (config.gitbot.toLowerCase() === 'gitstandup') {
+    var today = spawn(__dirname + '/standup-helper.sh', ['-m ' + config.depth, config.repos], {shell:true});
+    todayBox.content = '';
+    today.stdout.on('data', data => {
+      todayCommits = getCommits(`${data}`, todayBox);
+      updateCommitsGraph(todayCommits, weekCommits);
+      screen.render();
+    });
+
+	var week = spawn(__dirname + '/standup-helper.sh', ['-m ' + config.depth + ' -d 7', config.repos], {shell:true});
+    // var week = spawn('sh ' + __dirname + '/standup-helper.sh', ['-m ' + config.depth + ' -d 7', config.repos], {shell:true});
+    weekBox.content = '';
+    week.stdout.on('data', data => {
+      weekCommits = getCommits(`${data}`, weekBox);
+      updateCommitsGraph(todayCommits, weekCommits);
+      screen.render();
+    });
+  } else {
+    gitbot.findGitRepos(config.repos, config.depth-1, (err, allRepos) => {
+      if (err) {
+        return todayBox.content = err;
+        screen.render();
+      }
+      gitbot.getCommitsFromRepos(allRepos, 1, (err, data) => {
+        if (err) {
+          return todayBox.content = err;
+          screen.render();
+        }
+        todayBox.content = '';
+        todayCommits = getCommits(`${data}`, todayBox);
+        updateCommitsGraph(todayCommits, weekCommits);
+        screen.render();
+      });
+      gitbot.getCommitsFromRepos(allRepos, 7, (err, data) => {
+        if (err) {
+          return weekBox.content = err;
+          screen.render();
+        }
+        weekBox.content = '';
+        weekCommits = getCommits(`${data}`, weekBox);
+        updateCommitsGraph(todayCommits, weekCommits);
+        screen.render();
+      });
+    });
+  }
 }
 
 function makeBox(label) {
@@ -247,13 +269,6 @@ function makeGraphBox(label) {
   options.xOffset= 4;
   options.maxHeight= 10;
   return options;
-}
-
-var commitRegex = /(.......) (- .*)/g;
-function getCommits(data, box) {
-  var content = colorizeLog(data);
-  box.content += content;
-  return (box.content.match(commitRegex) || []).length;
 }
 
 function updateCommitsGraph(today, week) {
@@ -319,6 +334,22 @@ function catSay(text) {
     ;
 }
 
+function getAnsiArt(textToSay) {
+  var artFileRegex = /.ansi$/;
+
+  // If config.say is custom art file path, then return custom art
+  if (artFileRegex.test(config.say)) {
+    return ansiArt.get({ filePath: config.say, speechText: textToSay });
+  }
+
+  switch (config.say) {
+    case 'bunny' : return bunnySay(textToSay);
+    case 'llama' : return llamaSay(textToSay);
+    case 'cat'   : return catSay(textToSay);
+    case 'yeoman': return yosay(textToSay);
+    default : return ansiArt.get({ artName: config.say, speechText: textToSay });
+  }
+}
 
 var pomodoroHandlers = {
   onTick: function() {
@@ -337,11 +368,8 @@ var pomodoroHandlers = {
     var content = `In Pomodoro Mode: ${remainingTime} ${statusText}`;
     var metaData = `Duration: ${pomodoroObject.getRunningDuration()} Minutes,  Break Time: ${pomodoroObject.getBreakDuration()} Minutes\n`;
     metaData += 'commands: \n s - start/pause/resume \n e - stop \n u - update duration \n b - update break time';
-
-    parrotSay(content).then(function(text) {
-      parrotBox.content = text + metaData;
-      screen.render();
-    });
+    parrotBox.content = getAnsiArt(content) + metaData;
+    screen.render();
   },
 
   onBreakStarts: function() {
