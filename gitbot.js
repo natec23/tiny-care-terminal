@@ -1,12 +1,21 @@
-"use strict";
-
-const gitUsername = require('git-user-name')();
 const resolve = require('resolve-dir');
 const subdirs = require('subdirs');
 const isGit = require('is-git');
 const gitlog = require('gitlog');
-const path = require('path');
 const async = require("async");
+const getGitUsername = require('git-user-name');
+
+function getGitUser() {
+  try {
+    return getGitUsername();
+  } catch(err) {
+    console.error(`ERROR reading git-config.
+      Use e.g. 'git config --global user.name "Mona Lisa"'.
+      See 'man git config' for further information.
+    `);
+    return process.exit(1);
+  }
+}
 
 /**
  * Go through all `repos` and look for subdirectories up to a given `depth`
@@ -52,6 +61,7 @@ function findGitRepos(repos, depth, callback) {
  */
 function getCommitsFromRepos(repos, days, callback) {
   let cmts = [];
+  let gitUser = getGitUser();
   async.each(repos, (repo, repoDone) => {
     try {
       gitlog({
@@ -60,7 +70,7 @@ function getCommitsFromRepos(repos, days, callback) {
         number: 100, //max commit count
         since: `${days} days ago`,
         fields: ['abbrevHash', 'subject', 'authorDateRel', 'authorName'],
-        author: gitUsername
+        author: gitUser
       }, (err, logs) => {
         // Error
         if (err) {
